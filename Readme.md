@@ -1,0 +1,1 @@
+Minesweeper project following functional programming approach
