@@ -15,25 +15,28 @@ import {
   revealTile,
   checkWin,
   checkLose,
+  positionMatch,
+  markedTilesCount,
 } from "./minesweeper.js";
 
 const BOARD_SIZE = 10;
 const NUMBER_OF_MINES = 10;
 
-const board = createBoard(BOARD_SIZE, NUMBER_OF_MINES);
+let board = createBoard(
+  BOARD_SIZE,
+  getMinePositions(BOARD_SIZE, NUMBER_OF_MINES)
+);
 const boardElement = document.querySelector(".board");
 const minesLeftText = document.querySelector("[data-mine-count]");
 const messageText = document.querySelector(".subtext");
 
 /////////////////////////////////////////////////////
-const listMinesLeft = function () {
-  const markedTilesCount = board.reduce((count, row) => {
-    return (
-      count + row.filter((tile) => tile.status === TILE_STATUSES.MARKED).length
-    );
-  }, 0);
+function randomNumber(size) {
+  return Math.floor(Math.random() * size);
+}
 
-  minesLeftText.textContent = NUMBER_OF_MINES - markedTilesCount;
+const listMinesLeft = function () {
+  minesLeftText.textContent = NUMBER_OF_MINES - markedTilesCount(board);
 };
 
 // Prevent addEventListener from propagation
@@ -62,32 +65,82 @@ const checkGameEnd = function () {
     board.forEach((row) => {
       row.forEach((tile) => {
         // Unmark tile if marked to reveal all the mines
-        if (tile.status === TILE_STATUSES.MARKED) markTile(tile);
+        if (tile.status === TILE_STATUSES.MARKED) board = markTile(board, tile);
 
         // Reveal mine
-        if (tile.mine) revealTile(board, tile);
+        if (tile.mine) board = revealTile(board, tile);
       });
     });
   }
 };
 
-/////////////////////////////////////////////////////
-board.forEach((row) => {
-  row.forEach((tile) => {
-    boardElement.append(tile.element);
+const tiletoElement = function (tile) {
+  const element = document.createElement("div");
+  element.dataset.status = tile.status;
+  element.dataset.x = tile.x;
+  element.dataset.y = tile.y;
+  element.textContent = tile.adjacentMinesCount || "";
+  return element;
+};
 
-    tile.element.addEventListener("click", function () {
-      revealTile(board, tile);
-      checkGameEnd();
-    });
-    tile.element.addEventListener("contextmenu", function (e) {
-      e.preventDefault();
-
-      markTile(tile);
-
-      listMinesLeft();
-    });
+const getTileElements = function () {
+  return board.flatMap((row) => {
+    return row.map(tiletoElement);
   });
+};
+
+// Get positions for mines
+function getMinePositions(boardSize, numberOfMines) {
+  const positions = [];
+
+  while (positions.length < numberOfMines) {
+    const position = {
+      x: randomNumber(boardSize),
+      y: randomNumber(boardSize),
+    };
+
+    // If previously no mine, then set the tile as mine
+    if (!positions.some((p) => positionMatch(position, p))) {
+      positions.push(position);
+    }
+  }
+
+  return positions;
+}
+
+/////////////////////////////////////////////////////
+const render = function () {
+  boardElement.innerHTML = "";
+  checkGameEnd();
+
+  getTileElements().forEach((element) => {
+    boardElement.append(element);
+  });
+
+  listMinesLeft();
+};
+
+boardElement.addEventListener("click", function (e) {
+  if (!e.target.matches("[data-status]")) return;
+
+  board = revealTile(board, {
+    x: +e.target.dataset.x,
+    y: +e.target.dataset.y,
+  });
+
+  render();
 });
+
+boardElement.addEventListener("contextmenu", function (e) {
+  if (!e.target.matches("[data-status]")) return;
+
+  e.preventDefault();
+  board = markTile(board, {
+    x: +e.target.dataset.x,
+    y: +e.target.dataset.y,
+  });
+  render();
+});
+
 boardElement.style.setProperty("--size", BOARD_SIZE);
-minesLeftText.textContent = NUMBER_OF_MINES;
+render();
